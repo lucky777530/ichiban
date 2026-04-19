@@ -324,6 +324,11 @@
   <section class="panel active" id="panel-scan">
     <div class="card">
       <div class="card-title">選擇商品</div>
+
+      <div id="quick-prize-picker" style="margin-bottom:12px;">
+        <!-- 商品快速選擇按鈕 -->
+      </div>
+
       <div class="scan-btn" id="btn-scan">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
@@ -358,8 +363,8 @@
         </div>
       </div>
       <div class="hint">
-        ※ 若客人沒中到商品,每張未中獎單=小賞1個,每個小賞可折抵 $30<br/>
-        ※ 有中獎就不算小賞折抵
+        ※ 系統自動帶入「抽獎數 − 中獎數 = 小賞數」,可手動修改<br/>
+        ※ 每個小賞可折抵 $30(付款時決定是否使用折抵)
       </div>
       <button class="btn red" id="btn-settle" style="margin-top:12px;">計 算 結 帳</button>
 
@@ -368,11 +373,32 @@
         <div class="settle-row"><span class="k">抽獎費用</span><span class="v mono">$<span id="s-base">0</span></span></div>
         <div class="settle-row"><span class="k">中獎商品</span><span class="v mono"><span id="s-win-n">0</span> 個</span></div>
         <div class="settle-row"><span class="k">小賞數</span><span class="v mono"><span id="s-small-n">0</span> 個</span></div>
-        <div class="settle-row"><span class="k">小賞折抵</span><span class="v mono" style="color:var(--red);">− $<span id="s-discount">0</span></span></div>
+
+        <!-- 折抵開關 -->
+        <div class="settle-row" id="discount-row" style="align-items:center;">
+          <span class="k" style="display:flex;align-items:center;gap:8px;">
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin:0;">
+              <input type="checkbox" id="use-discount" checked style="width:16px;height:16px;cursor:pointer;">
+              <span>使用小賞折抵</span>
+            </label>
+          </span>
+          <span class="v mono" id="discount-val" style="color:var(--red);">− $<span id="s-discount">0</span></span>
+        </div>
+
         <div class="settle-total">
           <span class="k">應收金額</span>
           <span class="v"><small>$</small><span id="s-final">0</span></span>
         </div>
+
+        <!-- 付款方式 -->
+        <div style="margin-top:14px;">
+          <div style="font-size:11px;letter-spacing:2px;color:var(--muted);margin-bottom:8px;">付 款 方 式</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+            <div class="pay-method active" data-pay="cash" style="padding:14px 8px;text-align:center;border:1.5px solid var(--ink);background:var(--ink);color:var(--paper);font-weight:700;letter-spacing:3px;cursor:pointer;">💵 現 金</div>
+            <div class="pay-method" data-pay="transfer" style="padding:14px 8px;text-align:center;border:1.5px solid var(--ink);background:var(--paper);color:var(--ink);font-weight:700;letter-spacing:3px;cursor:pointer;">💳 轉 帳</div>
+          </div>
+        </div>
+
         <div class="commission-row" id="commission-row" style="margin-top:10px;padding:10px 12px;border:1px dashed var(--gold);background:rgba(184,147,90,0.08);display:flex;justify-content:space-between;align-items:center;">
           <span style="font-size:12px;letter-spacing:2px;color:var(--green);">本筆業績抽成</span>
           <span class="mono" style="font-weight:700;color:var(--green);font-size:16px;">+$<span id="s-commission">0</span></span>
@@ -538,31 +564,35 @@
           <label>成本倍率(建議 3 倍)</label>
           <input type="number" id="p-mult" value="3" step="0.1" inputmode="decimal" />
         </div>
-        <div class="row3">
-          <div class="field"><label>1 抽加成</label>
-            <input type="number" id="p-r1" value="1.15" step="0.01" inputmode="decimal" /></div>
-          <div class="field"><label>3 抽係數</label>
-            <input type="number" id="p-r3" value="1.00" step="0.01" inputmode="decimal" /></div>
-          <div class="field"><label>5 抽折扣</label>
-            <input type="number" id="p-r5" value="0.92" step="0.01" inputmode="decimal" /></div>
-        </div>
-        <button class="btn red" id="btn-calc">計 算 定 價</button>
 
-        <div class="result" id="result" style="display:none;">
-          <div class="result-title">SUGGESTED PRICING</div>
-          <div class="price-grid">
-            <div class="price-cell"><div class="label">1 抽</div><div class="amt">$<span id="r-p1">0</span></div><div class="per" id="r-per1">—</div></div>
-            <div class="price-cell"><div class="label">3 抽</div><div class="amt">$<span id="r-p3">0</span></div><div class="per" id="r-per3">—</div></div>
-            <div class="price-cell best"><div class="label">5 抽 ★</div><div class="amt">$<span id="r-p5">0</span></div><div class="per" id="r-per5">—</div></div>
+        <button class="btn" id="btn-suggest" style="margin-bottom:14px;background:var(--gold);border-color:var(--gold);">💡 自 動 帶 入 建 議 定 價</button>
+
+        <div class="hint" style="margin-top:-8px;margin-bottom:12px;">
+          點上方按鈕會依成本與抽數自動算出建議金額,填入下方三個欄位,之後可自由調整
+        </div>
+
+        <div class="row3">
+          <div class="field"><label>1 抽定價 ($)</label>
+            <input type="number" id="p-p1" placeholder="345" inputmode="decimal" /></div>
+          <div class="field"><label>3 抽定價 ($)</label>
+            <input type="number" id="p-p3" placeholder="900" inputmode="decimal" /></div>
+          <div class="field"><label>5 抽定價 ($)</label>
+            <input type="number" id="p-p5" placeholder="1380" inputmode="decimal" /></div>
+        </div>
+
+        <div id="price-per-draw" style="display:none;margin-bottom:14px;padding:10px;background:var(--paper-2);border:1px solid var(--line);font-size:11px;color:var(--muted);">
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+            <span>1 抽均價</span><span class="mono" id="per-1">—</span>
           </div>
-          <div class="result-meta">
-            <span>目標營收 $<span id="r-target">0</span></span>
-            <span>毛利 $<span id="r-profit">0</span></span>
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+            <span>3 抽均價</span><span class="mono" id="per-3">—</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;">
+            <span>5 抽均價</span><span class="mono" id="per-5">—</span>
           </div>
         </div>
-        <div style="margin-top:14px;">
-          <button class="btn ghost" id="btn-save">儲 存 商 品</button>
-        </div>
+
+        <button class="btn red" id="btn-save">儲 存 商 品</button>
       </div>
     </div>
 
@@ -896,7 +926,49 @@ function lookupByCode(code) {
   if (!prize) { toast('找不到編號:' + code, true); return; }
   currentPrize = prize;
   renderCurrentPrize();
+  renderQuickPrizePicker();
   toast('已選擇:' + prize.name);
+}
+
+// 員工掃碼頁 - 快速商品按鈕
+function renderQuickPrizePicker() {
+  const box = $('quick-prize-picker');
+  if (!box) return;
+  // 只顯示還有剩餘抽數的商品
+  const available = prizes.filter(p => (p.total - getUsedDraws(p.id)) > 0);
+  if (!available.length) {
+    box.innerHTML = '';
+    return;
+  }
+  box.innerHTML = `
+    <div style="font-size:10px;letter-spacing:3px;color:var(--muted);margin-bottom:8px;">快速選擇</div>
+    <div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:6px;-webkit-overflow-scrolling:touch;">
+      ${available.map(p => {
+        const used = getUsedDraws(p.id);
+        const remain = p.total - used;
+        const active = currentPrize && currentPrize.id === p.id;
+        return `
+          <div class="quick-prize-chip" data-id="${p.id}"
+            style="flex-shrink:0;padding:10px 14px;border:1.5px solid var(--ink);cursor:pointer;min-width:100px;text-align:center;
+            background:${active ? 'var(--ink)' : 'var(--paper)'};
+            color:${active ? 'var(--paper)' : 'var(--ink)'};">
+            <div style="font-weight:700;font-size:13px;letter-spacing:1px;">${p.name}</div>
+            <div class="mono" style="font-size:10px;opacity:.7;margin-top:2px;">${p.code || '—'} · 剩 ${remain}</div>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `;
+  box.querySelectorAll('.quick-prize-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      const p = prizes.find(x => x.id === chip.dataset.id);
+      if (!p) return;
+      currentPrize = p;
+      renderCurrentPrize();
+      renderQuickPrizePicker();
+      toast('已選擇:' + p.name);
+    });
+  });
 }
 
 function renderCurrentPrize() {
@@ -926,6 +998,46 @@ function getUsedDraws(prizeId) {
   return settles.filter(s => s.prizeId === prizeId).reduce((a, s) => a + (s.draws || 0), 0);
 }
 
+// 自動計算小賞:抽數 − 中獎數 = 小賞數
+function autoFillSmall() {
+  const draws = parseInt($('s-draw').value) || 0;
+  const wins = parseInt($('s-win').value) || 0;
+  const small = Math.max(0, draws - wins);
+  $('s-small').value = small;
+}
+$('s-draw').addEventListener('input', autoFillSmall);
+$('s-win').addEventListener('input', autoFillSmall);
+
+// 付款方式切換
+let currentPayMethod = 'cash';
+document.querySelectorAll('.pay-method').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.pay-method').forEach(x => {
+      x.classList.remove('active');
+      x.style.background = 'var(--paper)';
+      x.style.color = 'var(--ink)';
+    });
+    btn.classList.add('active');
+    btn.style.background = 'var(--ink)';
+    btn.style.color = 'var(--paper)';
+    currentPayMethod = btn.dataset.pay;
+  });
+});
+
+// 折抵開關即時更新應收金額
+$('use-discount').addEventListener('change', () => {
+  if (!pendingSettle) return;
+  const use = $('use-discount').checked;
+  const discount = use ? (pendingSettle.smalls * 30) : 0;
+  const final = Math.max(0, pendingSettle.baseCost - discount);
+  $('s-discount').textContent = toMoney(discount);
+  $('s-final').textContent = toMoney(final);
+  $('discount-val').style.display = use ? '' : 'none';
+  pendingSettle.discount = discount;
+  pendingSettle.finalCost = final;
+  pendingSettle.useDiscount = use;
+});
+
 /* 結算 */
 $('btn-settle').addEventListener('click', async () => {
   if (!currentPrize) { toast('請先選商品', true); return; }
@@ -952,7 +1064,10 @@ $('btn-settle').addEventListener('click', async () => {
     plan = `${draws}抽`;
   }
 
-  const discount = (wins > 0) ? 0 : smalls * 30;
+  // 預設使用小賞折抵(不再看有無中獎)
+  const useDiscount = true;
+  $('use-discount').checked = true;
+  const discount = smalls * 30;
   const final = Math.max(0, base - discount);
   const rate = await load(K_COMMISSION, 5);
   const commission = draws * rate;
@@ -964,9 +1079,19 @@ $('btn-settle').addEventListener('click', async () => {
   $('s-discount').textContent = toMoney(discount);
   $('s-final').textContent = toMoney(final);
   $('s-commission').textContent = toMoney(commission);
+  $('discount-val').style.display = '';
   $('settle-result').style.display = 'block';
   $('sync-status').textContent = '⋯ 待確認送出';
   $('sync-status').className = 'sync-status wait';
+
+  // 付款方式重置為現金
+  currentPayMethod = 'cash';
+  document.querySelectorAll('.pay-method').forEach(x => {
+    const active = x.dataset.pay === 'cash';
+    x.classList.toggle('active', active);
+    x.style.background = active ? 'var(--ink)' : 'var(--paper)';
+    x.style.color = active ? 'var(--paper)' : 'var(--ink)';
+  });
 
   pendingSettle = {
     id: 's_' + Date.now(),
@@ -976,6 +1101,7 @@ $('btn-settle').addEventListener('click', async () => {
     prizeName: currentPrize.name,
     draws, wins, smalls,
     plan, baseCost: base, discount, finalCost: final,
+    useDiscount,
     commissionRate: rate,
     commission: commission,
     synced: false
@@ -984,6 +1110,8 @@ $('btn-settle').addEventListener('click', async () => {
 
 $('btn-confirm').addEventListener('click', async () => {
   if (!pendingSettle) return;
+  pendingSettle.payMethod = currentPayMethod;
+  pendingSettle.payMethodLabel = currentPayMethod === 'cash' ? '現金' : '轉帳';
   settles.unshift(pendingSettle);
   await save(K_SETTLES, settles);
   const webhook = await load(K_WEBHOOK, '');
@@ -1205,73 +1333,93 @@ $('template-select').addEventListener('change', (e) => {
   $('p-cost').value = p.cost;
   $('p-total').value = p.total;
   $('p-mult').value = p.mult;
-  $('p-r1').value = p.r1;
-  $('p-r3').value = p.r3;
-  $('p-r5').value = p.r5;
+  $('p-p1').value = p.p1;
+  $('p-p3').value = p.p3;
+  $('p-p5').value = p.p5;
+  updatePerDraw();
   toast('已套用「' + p.name + '」設定,請修改名稱');
   $('p-name').focus();
 });
 
-$('btn-calc').addEventListener('click', () => {
+// 自動帶入建議定價
+$('btn-suggest').addEventListener('click', () => {
+  const cost = parseFloat($('p-cost').value) || 0;
+  const total = parseInt($('p-total').value) || 0;
+  const mult = parseFloat($('p-mult').value) || 3;
+  if (cost <= 0 || total <= 0) {
+    toast('請先輸入成本與總抽數', true);
+    return;
+  }
+  const target = cost * mult;
+  const basePerDraw = target / total;
+  const p1 = roundPrice(basePerDraw * 1.15);
+  const p3 = roundPrice(basePerDraw * 3);
+  const p5 = roundPrice(basePerDraw * 5 * 0.92);
+  $('p-p1').value = p1;
+  $('p-p3').value = p3;
+  $('p-p5').value = p5;
+  updatePerDraw();
+  toast('已帶入建議值,可自由修改');
+});
+
+// 即時顯示每抽均價
+function updatePerDraw() {
+  const p1 = parseFloat($('p-p1').value) || 0;
+  const p3 = parseFloat($('p-p3').value) || 0;
+  const p5 = parseFloat($('p-p5').value) || 0;
+  if (p1 === 0 && p3 === 0 && p5 === 0) {
+    $('price-per-draw').style.display = 'none';
+    return;
+  }
+  $('per-1').textContent = p1 > 0 ? '$' + toMoney(p1) : '—';
+  $('per-3').textContent = p3 > 0 ? '$' + toMoney(p3 / 3) : '—';
+  $('per-5').textContent = p5 > 0 ? '$' + toMoney(p5 / 5) : '—';
+  $('price-per-draw').style.display = 'block';
+}
+['p-p1', 'p-p3', 'p-p5'].forEach(id => {
+  $(id).addEventListener('input', updatePerDraw);
+});
+
+$('btn-save').addEventListener('click', async () => {
   const code = $('p-code').value.trim();
   const name = $('p-name').value.trim();
   const cost = parseFloat($('p-cost').value) || 0;
   const total = parseInt($('p-total').value) || 0;
   const mult = parseFloat($('p-mult').value) || 3;
-  const r1 = parseFloat($('p-r1').value) || 1.15;
-  const r3 = parseFloat($('p-r3').value) || 1;
-  const r5 = parseFloat($('p-r5').value) || 0.92;
-  if (cost <= 0 || total <= 0) { toast('請輸入成本與抽數', true); return; }
+  const p1 = parseFloat($('p-p1').value) || 0;
+  const p3 = parseFloat($('p-p3').value) || 0;
+  const p5 = parseFloat($('p-p5').value) || 0;
 
-  const target = cost * mult;
-  const basePerDraw = target / total;
-  const p1 = roundPrice(basePerDraw * r1);
-  const p3 = roundPrice(basePerDraw * r3 * 3);
-  const p5 = roundPrice(basePerDraw * r5 * 5);
+  if (!code) { toast('請輸入商品編號', true); $('p-code').focus(); return; }
+  if (!name) { toast('請輸入商品名稱', true); $('p-name').focus(); return; }
+  if (cost <= 0) { toast('請輸入成本', true); $('p-cost').focus(); return; }
+  if (total <= 0) { toast('請輸入總抽數', true); $('p-total').focus(); return; }
+  if (p1 <= 0 || p3 <= 0 || p5 <= 0) { toast('請填入三個抽獎定價', true); return; }
 
-  $('r-p1').textContent = toMoney(p1);
-  $('r-p3').textContent = toMoney(p3);
-  $('r-p5').textContent = toMoney(p5);
-  $('r-per1').textContent = '$' + toMoney(p1) + ' /抽';
-  $('r-per3').textContent = '$' + toMoney(p3 / 3) + ' /抽';
-  $('r-per5').textContent = '$' + toMoney(p5 / 5) + ' /抽';
-  $('r-target').textContent = toMoney(target);
-  $('r-profit').textContent = toMoney(target - cost);
-  $('result').style.display = 'block';
+  const prizeData = { code, name, cost, total, mult, p1, p3, p5, createdAt: Date.now() };
 
-  pendingPrize = { code, name: name || '未命名', cost, total, mult, r1, r3, r5, p1, p3, p5, createdAt: Date.now() };
-});
-
-$('btn-save').addEventListener('click', async () => {
-  if (!pendingPrize) { toast('請先計算定價', true); return; }
-  if (!pendingPrize.code) { toast('請輸入商品編號', true); $('p-code').focus(); return; }
-  if (!pendingPrize.name || pendingPrize.name === '未命名') {
-    toast('請輸入商品名稱', true); $('p-name').focus(); return;
-  }
-  const existing = prizes.findIndex(p => (p.code || '').toUpperCase() === pendingPrize.code.toUpperCase());
+  const existing = prizes.findIndex(p => (p.code || '').toUpperCase() === code.toUpperCase());
   if (existing >= 0) {
-    pendingPrize.id = prizes[existing].id;
-    prizes[existing] = pendingPrize;
-    toast('已更新:' + pendingPrize.name);
+    prizeData.id = prizes[existing].id;
+    prizeData.createdAt = prizes[existing].createdAt;
+    prizes[existing] = prizeData;
+    toast('已更新:' + name);
   } else {
-    pendingPrize.id = 'p_' + Date.now();
-    prizes.unshift(pendingPrize);
-    toast('已新增:' + pendingPrize.name);
+    prizeData.id = 'p_' + Date.now();
+    prizes.unshift(prizeData);
+    toast('已新增:' + name);
   }
   await save(K_PRIZES, prizes);
-  pendingPrize = null;
   clearPrizeForm();
   renderPrizeList();
   renderTemplateSelect();
+  renderQuickPrizePicker();
 });
 
 function clearPrizeForm() {
-  ['p-code','p-name','p-cost','p-total'].forEach(id => $(id).value = '');
+  ['p-code','p-name','p-cost','p-total','p-p1','p-p3','p-p5'].forEach(id => $(id).value = '');
   $('p-mult').value = 3;
-  $('p-r1').value = 1.15;
-  $('p-r3').value = 1;
-  $('p-r5').value = 0.92;
-  $('result').style.display = 'none';
+  $('price-per-draw').style.display = 'none';
 }
 
 function renderPrizeList() {
@@ -1329,12 +1477,13 @@ function editPrize(id) {
   $('p-name').value = p.name;
   $('p-cost').value = p.cost;
   $('p-total').value = p.total;
-  $('p-mult').value = p.mult;
-  $('p-r1').value = p.r1;
-  $('p-r3').value = p.r3;
-  $('p-r5').value = p.r5;
+  $('p-mult').value = p.mult || 3;
+  $('p-p1').value = p.p1;
+  $('p-p3').value = p.p3;
+  $('p-p5').value = p.p5;
+  updatePerDraw();
   window.scrollTo({ top: 0, behavior: 'smooth' });
-  toast('已載入,修改後按計算定價→儲存');
+  toast('已載入,修改後按儲存商品');
 }
 
 async function deletePrize(id) {
@@ -1542,6 +1691,7 @@ $('import-file').addEventListener('change', async (e) => {
 (async () => {
   prizes = await load(K_PRIZES, []);
   settles = await load(K_SETTLES, []);
+  renderQuickPrizePicker();
 })();
 </script>
 </body>
