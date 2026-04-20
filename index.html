@@ -2397,17 +2397,32 @@ $('btn-save-pin').addEventListener('click', async () => {
 
 $('btn-save-webhook').addEventListener('click', async () => {
   const url = $('cfg-webhook').value.trim();
+  if (!url) { toast('請先填網址', 'err'); return; }
+
   try {
-    await save(K_WEBHOOK, url);
-    // 驗證有真的存進去
-    const saved = await load(K_WEBHOOK, '');
-    if (saved === url) {
-      toast('✓ 已儲存網址', 'ok');
-    } else {
-      toast('儲存失敗,請重試', 'err');
+    localStorage.setItem('__test__', '1');
+    const testRead = localStorage.getItem('__test__');
+    localStorage.removeItem('__test__');
+    if (testRead !== '1') {
+      toast('瀏覽器不支援儲存', 'err');
+      return;
     }
   } catch (e) {
-    toast('儲存錯誤:' + e.message, 'err');
+    toast('擋住儲存:' + e.message, 'err');
+    return;
+  }
+
+  try {
+    localStorage.setItem(K_WEBHOOK, JSON.stringify(url));
+    const saved = localStorage.getItem(K_WEBHOOK);
+    const parsed = saved ? JSON.parse(saved) : null;
+    if (parsed === url) {
+      toast('✓ 已儲存網址', 'ok');
+    } else {
+      toast('驗證失敗', 'err');
+    }
+  } catch (e) {
+    toast('錯誤:' + e.message, 'err');
   }
 });
 
