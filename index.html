@@ -766,21 +766,8 @@
         </div>
 
         <div style="margin-top:12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
-          <span class="sync-status wait" id="sync-status">⋯ 待結帳</span>
-          <div style="display:flex;gap:6px;">
-            <button class="btn cyan small" id="btn-add-cart" style="width:auto;padding:9px 12px;">➕ 加購物車</button>
-            <button class="btn pink small" id="btn-checkout" style="width:auto;padding:9px 12px;">✓ 結 帳</button>
-          </div>
-        </div>
-        
-        <!-- 購物車清單 -->
-        <div id="cart-section" style="display:none;margin-top:16px;padding:12px;background:var(--panel-2);border:2px dashed var(--cyan);">
-          <div style="font-family:'Press Start 2P',monospace;font-size:10px;color:var(--cyan);margin-bottom:10px;letter-spacing:1px;">🛒 購物車</div>
-          <div id="cart-list"></div>
-          <div style="margin-top:10px;padding:10px;background:var(--bg-2);border:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;font-weight:700;">
-            <span>合計應收</span>
-            <span class="mono" style="font-size:18px;color:var(--gold);">$<span id="cart-total">0</span></span>
-          </div>
+          <span class="sync-status wait" id="sync-status">⋯ 待送出</span>
+          <button class="btn pink small" id="btn-confirm" style="width:auto;padding:9px 18px;">✓ 確 認 送 出</button>
         </div>
       </div>
     </div>
@@ -1135,8 +1122,7 @@ let settles = [];
 let staffs = [];
 let currentStaff = '';
 let currentPrize = null;
-let pendingCart = []; // 購物車陣列
-let currentPayMethod = 'cash';
+let pendingSettle = null;
 let bonusStaffFilter = '';
 
 const $ = id => document.getElementById(id);
@@ -1418,9 +1404,8 @@ document.querySelectorAll('.pay-method').forEach(btn => {
     currentPayMethod = btn.dataset.pay;
     if (currentPayMethod === 'split') {
       $('split-payment').style.display = 'block';
-      if (pendingCart.length) {
-        const totalCost = pendingCart.reduce((sum, item) => sum + item.finalCost, 0);
-        $('pay-cash').value = totalCost;
+      if (pendingSettle) {
+        $('pay-cash').value = pendingSettle.finalCost;
         $('pay-transfer').value = 0;
         updateSplitCheck();
       }
@@ -1431,12 +1416,11 @@ document.querySelectorAll('.pay-method').forEach(btn => {
 });
 
 function updateSplitCheck() {
-  if (!pendingCart.length) return;
-  const totalCost = pendingCart.reduce((sum, item) => sum + item.finalCost, 0);
+  if (!pendingSettle) return;
   const cash = parseFloat($('pay-cash').value) || 0;
   const transfer = parseFloat($('pay-transfer').value) || 0;
   const total = cash + transfer;
-  const expected = totalCost;
+  const expected = pendingSettle.finalCost;
   const diff = total - expected;
   const el = $('split-status');
   if (diff === 0) {
@@ -1544,8 +1528,8 @@ $('btn-settle').addEventListener('click', async () => {
   $('pay-transfer').value = '';
   $('s-awards').value = '';
 
-  pendingCart.push({
-    id: 's_' + Date.now() + '_' + pendingCart.length,
+  pendingSettle = {
+    id: 's_' + Date.now(),
     timestamp: Date.now(),
     staff: currentStaff,
     prizeId: currentPrize.id,
@@ -1559,71 +1543,48 @@ $('btn-settle').addEventListener('click', async () => {
     commission: commission,
     halfPrice: halfPrice,
     synced: false
-  });
-  
-  renderCart();
-  toast('✓ 已加入購物車', 'ok');
+  };
 });
 
-$('btn-add-cart').addEventListener('click', () => {
-  $('btn-settle').click(); // 觸發計算結帳,自動加進購物車
-});
-
-$('btn-checkout').addEventListener('click', async () => {
-  if (!pendingCart.length) { toast('購物車是空的', 'err'); return; }
-  if (!currentStaff) { toast('請先選員工(左上角)', 'err'); return; }
+$('btn-confirm').addEventListener('click', async () => {
+  if (!pendingSettle) return;
 
   if (currentPayMethod === 'split') {
     const cash = parseFloat($('pay-cash').value) || 0;
     const transfer = parseFloat($('pay-transfer').value) || 0;
-    const totalCost = pendingCart.reduce((sum, item) => sum + item.finalCost, 0);
-    if (cash + transfer !== totalCost) {
-      toast(`現金+轉帳 ≠ 應收 $${toMoney(totalCost)}`, 'err');
+    if (cash + transfer !== pendingSettle.finalCost) {
+      toast(`現金+轉帳 ≠ 應收 $${toMoney(pendingSettle.finalCost)}`, 'err');
       return;
     }
+    pendingSettle.payMethod = 'split';
+    pendingSettle.payMethodLabel = '現金+轉帳';
+    pendingSettle.payCash = cash;
+    pendingSettle.payTransfer = transfer;
+  } else if (currentPayMethod === 'cash') {
+    pendingSettle.payMethod = 'cash';
+    pendingSettle.payMethodLabel = '現金';
+    pendingSettle.payCash = pendingSettle.finalCost;
+    pendingSettle.payTransfer = 0;
+  } else {
+    pendingSettle.payMethod = 'transfer';
+    pendingSettle.payMethodLabel = '轉帳';
+    pendingSettle.payCash = 0;
+    pendingSettle.payTransfer = pendingSettle.finalCost;
   }
 
-  // 為每個購物車項目加付款方式 + 獎項
-  for (let item of pendingCart) {
-    if (currentPayMethod === 'split') {
-      const cash = parseFloat($('pay-cash').value) || 0;
-      const transfer = parseFloat($('pay-transfer').value) || 0;
-      item.payMethod = 'split';
-      item.payMethodLabel = '現金+轉帳';
-      item.payCash = Math.round(cash * item.finalCost / pendingCart.reduce((sum, x) => sum + x.finalCost, 0));
-      item.payTransfer = Math.round(transfer * item.finalCost / pendingCart.reduce((sum, x) => sum + x.finalCost, 0));
-    } else if (currentPayMethod === 'cash') {
-      item.payMethod = 'cash';
-      item.payMethodLabel = '現金';
-      item.payCash = item.finalCost;
-      item.payTransfer = 0;
-    } else {
-      item.payMethod = 'transfer';
-      item.payMethodLabel = '轉帳';
-      item.payCash = 0;
-      item.payTransfer = item.finalCost;
-    }
-    item.awards = $('s-awards').value.trim();
-  }
+  // 獎項記錄
+  pendingSettle.awards = $('s-awards').value.trim();
 
-  // 儲存購物車內的所有項目
-  settles.unshift(...pendingCart);
+  settles.unshift(pendingSettle);
   await save(K_SETTLES, settles);
 
-  // 逐個同步到試算表
   const webhook = await load(K_WEBHOOK, '') || DEFAULT_WEBHOOK;
   if (webhook) {
     $('sync-status').textContent = '⋯ 同步中';
-    let syncOk = true;
-    for (let item of pendingCart) {
-      const ok = await syncToSheet(item, webhook);
-      if (!ok) syncOk = false;
-    }
-    if (syncOk) {
-      for (let item of pendingCart) {
-        const idx = settles.findIndex(s => s.id === item.id);
-        if (idx >= 0) settles[idx].synced = true;
-      }
+    const ok = await syncToSheet(pendingSettle, webhook);
+    if (ok) {
+      const idx = settles.findIndex(s => s.id === pendingSettle.id);
+      if (idx >= 0) settles[idx].synced = true;
       await save(K_SETTLES, settles);
       $('sync-status').textContent = '✓ 已同步';
       $('sync-status').className = 'sync-status ok';
@@ -1635,17 +1596,12 @@ $('btn-checkout').addEventListener('click', async () => {
     $('sync-status').textContent = '✓ 已保存';
     $('sync-status').className = 'sync-status ok';
   }
-  
-  toast('✓ 結帳成功', 'ok');
-  pendingCart = [];
-  renderCart();
+  toast('✓ 送出成功', 'ok');
+  pendingSettle = null;
   renderCurrentPrize();
   $('s-draw').value = '';
   $('s-win').value = 0;
   $('s-small').value = 0;
-  $('s-awards').value = '';
-  $('settle-result').style.display = 'none';
-  $('cart-section').style.display = 'none';
   setTimeout(() => { $('settle-result').style.display = 'none'; }, 2000);
 });
 
@@ -1660,37 +1616,6 @@ async function syncToSheet(data, webhook) {
   } catch (e) { return false; }
 }
 
-// 購物車顯示
-function renderCart() {
-  const section = $('cart-section');
-  if (!pendingCart.length) {
-    section.style.display = 'none';
-    return;
-  }
-  
-  section.style.display = 'block';
-  const cartBox = $('cart-list');
-  const totalCost = pendingCart.reduce((sum, item) => sum + item.finalCost, 0);
-  
-  cartBox.innerHTML = pendingCart.map((item, idx) => `
-    <div style="padding:8px;background:var(--bg-2);border:1px solid var(--line);margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;">
-      <div>
-        <div style="font-weight:700;color:var(--cyan);">${item.prizeName}</div>
-        <div style="font-size:12px;color:var(--muted);">${item.prizeCode} · ${item.draws}抽 · $${toMoney(item.finalCost)}</div>
-      </div>
-      <button class="btn ghost micro" onclick="removeFromCart(${idx})" style="padding:4px 8px;font-size:11px;">❌</button>
-    </div>
-  `).join('');
-  
-  $('cart-total').textContent = toMoney(totalCost);
-}
-
-function removeFromCart(idx) {
-  pendingCart.splice(idx, 1);
-  renderCart();
-  toast('✓ 已移除', 'ok');
-}
-
 /* ============ 結算紀錄 ============ */
 async function deleteSettle(idx) {
   const settle = settles[idx];
@@ -1699,27 +1624,8 @@ async function deleteSettle(idx) {
   const confirm_msg = `確定刪除 ${settle.prizeName} 的紀錄?\n\n抽數: ${settle.draws}\n應收: $${toMoney(settle.finalCost)}\n抽成: $${settle.commission}\n\n刪除後會自動退回`;
   if (!confirm(confirm_msg)) return;
   
-  // 刪除紀錄
   settles.splice(idx, 1);
   await save(K_SETTLES, settles);
-  
-  // 同時從試算表刪除
-  const webhook = await load(K_WEBHOOK, '') || DEFAULT_WEBHOOK;
-  if (webhook) {
-    try {
-      await fetch(webhook, {
-        method: 'POST', mode: 'no-cors',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({
-          action: 'delete',
-          settleId: settle.id,
-          timestamp: new Date().toISOString()
-        })
-      });
-    } catch (e) {
-      console.error('試算表同步失敗', e);
-    }
-  }
   
   renderSettleList();
   renderRemain();
@@ -1738,7 +1644,7 @@ function renderSettleList() {
     else payDisplay = `💵 $${toMoney(s.finalCost)}`;
 
     return `
-      <div class="record" style="position:relative;">
+      <div class="record">
         <div class="record-head">
           <div>
             <div class="record-name">
