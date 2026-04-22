@@ -1418,8 +1418,9 @@ document.querySelectorAll('.pay-method').forEach(btn => {
     currentPayMethod = btn.dataset.pay;
     if (currentPayMethod === 'split') {
       $('split-payment').style.display = 'block';
-      if (pendingSettle) {
-        $('pay-cash').value = pendingSettle.finalCost;
+      if (pendingCart.length) {
+        const totalCost = pendingCart.reduce((sum, item) => sum + item.finalCost, 0);
+        $('pay-cash').value = totalCost;
         $('pay-transfer').value = 0;
         updateSplitCheck();
       }
@@ -1430,11 +1431,12 @@ document.querySelectorAll('.pay-method').forEach(btn => {
 });
 
 function updateSplitCheck() {
-  if (!pendingSettle) return;
+  if (!pendingCart.length) return;
+  const totalCost = pendingCart.reduce((sum, item) => sum + item.finalCost, 0);
   const cash = parseFloat($('pay-cash').value) || 0;
   const transfer = parseFloat($('pay-transfer').value) || 0;
   const total = cash + transfer;
-  const expected = pendingSettle.finalCost;
+  const expected = totalCost;
   const diff = total - expected;
   const el = $('split-status');
   if (diff === 0) {
